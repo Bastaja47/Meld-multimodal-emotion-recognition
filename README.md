@@ -35,10 +35,10 @@ Moguća objašnjenja (nisu proverena eksperimentima): oba ekstraktora su zamrznu
 
 ## Pristup
 
-1. **Priprema** – iz svakog videa se izdvaja audio (mono, 16 kHz, tačno 6 s) i 8 ravnomerno raspoređenih frejmova. Na frejmovima MTCNN seče lice (160×160); ako lice nije nađeno, koristi se prvo uspešno nađeno lice iz klipa, a u krajnjem slučaju centralni kadar.
-2. **Obeležja (zamrznuti modeli, bez fine-tuning-a)** – `facebook/wav2vec2-base` daje sekvencu (T, 768) po klipu; InceptionResnetV1 (VGGFace2) daje (8, 512).
-3. **Klasifikatori** – mali MLP-ovi nad obeležjima: audio i video grana (2 sloja), rana fuzija (konkatenacija obeležja → 3 sloja), kasna fuzija (ponderisani prosek softmax izlaza audio i video modela, α = 0.5).
-4. **Trening** – Adam (lr 1e-4), batch 32, do 30 epoha, ReduceLROnPlateau, rano zaustavljanje po weighted F1 na dev skupu.
+1. **Priprema** | iz svakog videa se izdvaja audio (mono, 16 kHz, tačno 6 s) i 8 ravnomerno raspoređenih frejmova. Na frejmovima MTCNN seče lice (160×160); ako lice nije nađeno, koristi se prvo uspešno nađeno lice iz klipa, a u krajnjem slučaju centralni kadar.
+2. **Obeležja (zamrznuti modeli, bez fine-tuning-a)** | `facebook/wav2vec2-base` daje sekvencu (T, 768) po klipu; InceptionResnetV1 (VGGFace2) daje (8, 512).
+3. **Klasifikatori** | mali MLP-ovi nad obeležjima: audio i video grana (2 sloja), rana fuzija (konkatenacija obeležja → 3 sloja), kasna fuzija (ponderisani prosek softmax izlaza audio i video modela, α = 0.5).
+4. **Trening** | Adam (lr 1e-4), batch 32, do 30 epoha, ReduceLROnPlateau, rano zaustavljanje po weighted F1 na dev skupu.
 
 ## Struktura projekta
 

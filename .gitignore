@@ -1,11 +1,25 @@
+# Sirovi MELD podaci i izvedeni fajlovi (preveliki za git)
+MELD.Raw/
+data/
 train_splits/
 dev_splits_complete/
 output_repeated_splits_test/
-data/
-checkpoints/
 *.wav
 *.mp4
 *.npy
+
+# Checkpoint-i modela
+checkpoints/
+*.pt
+
+# Python / okruzenje
 venv/
+.venv/
 __pycache__/
 *.pyc
+.ipynb_checkpoints/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/

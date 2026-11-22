@@ -1,6 +1,6 @@
 """
-Dataset klasa, arhitekture
-modela i pomocne funkcije (matrica konfuzije, upis rezultata)
+Zajednicki delovi: Dataset klasa, arhitekture modela i pomocne funkcije
+(matrica konfuzije, upis rezultata).
 """
 
 import numpy as np
@@ -19,9 +19,13 @@ NUM_CLASSES = len(EMOTIONS)
 
 class MELDFeatureDataset(Dataset):
     """
+    Cita unapred izvucena obelezja (.npy) za klipove iz manifest_final.csv.
+
     modality: "audio", "video" ili "both" (za ranu fuziju)
-    pooling:  "none" (flatten sirove sekvence, "bazna" varijanta iz rada)
-              ili "tp" (mean+std temporal pooling, druga varijanta)
+    pooling:  "none" - sirova vremenska sekvenca se spljosti u jedan vektor
+                       ("base" varijanta)
+              "tp"   - temporal pooling: mean + std po vremenskoj osi
+                       ("tp_cw" varijanta)
     """
 
     def __init__(self, df, modality, pooling):
@@ -33,15 +37,15 @@ class MELDFeatureDataset(Dataset):
         return len(self.df)
 
     def _load_and_pool(self, path):
-        arr = np.load(path)  # Učita .npy fajl sa embeddingom oblika (T, D) (T = vremenski koraci, D = dimenzija embeddinga)
+        arr = np.load(path)  # oblika (T, D): T vremenskih koraka, D dimenzija embeddinga
         t = torch.from_numpy(arr).float()
-        if self.pooling == "tp":   #Temporal pooling: racuna se mean i std po vremenskoj dimenziji, pa se spajaju u vektor (2D,)
+        if self.pooling == "tp":
             mean = t.mean(dim=0)
             std = t.std(dim=0)
             return torch.cat([mean, std], dim=0)  # (2D,)
         return t.flatten()  # (T*D,)
 
-    def __getitem__(self, idx):           #Uzima jedan red iz DataFrame‑a|Mapira labelu emocije u indeks(LABEL2IDX)|U zavisnosti od modality
+    def __getitem__(self, idx):
         row = self.df.iloc[idx]
         label = LABEL2IDX[row["emotion"]]
 
@@ -60,7 +64,7 @@ class MELDFeatureDataset(Dataset):
 
 
 class UnimodalMLP(torch.nn.Module):
-    """Isto za audio i video granu: dva potpuno povezana sloja"""
+    """Isti model za audio i video granu: dva potpuno povezana sloja."""
 
     def __init__(self, input_dim, hidden_dim=256, num_classes=NUM_CLASSES, dropout=0.3):
         super().__init__()
@@ -76,7 +80,10 @@ class UnimodalMLP(torch.nn.Module):
 
 
 class EarlyFusionMLP(torch.nn.Module):
-    """Tri potpuno povezana sloja/rana fuzija tj kombinujemo embedding vektore iz audio i video grane u jedan vektor i onda ga prosledjujemo kroz MLP"""
+    """
+    Rana fuzija: audio i video obelezja se spoje (konkatenacija) u jedan
+    vektor, pa prolaze kroz MLP sa tri potpuno povezana sloja.
+    """
 
     def __init__(self, input_dim, fusion_hidden_dim=512, num_classes=NUM_CLASSES, dropout=0.3):
         super().__init__()
@@ -95,7 +102,7 @@ class EarlyFusionMLP(torch.nn.Module):
 
 
 def plot_confusion_matrix(cm, title, out_path):
-    """Confusion matrix broj uzoraka + procenat po redu"""
+    """Matrica konfuzije: broj uzoraka + procenat po redu (po pravoj klasi)."""
     row_sums = cm.sum(axis=1, keepdims=True)
     row_pct = np.divide(
         cm, row_sums, out=np.zeros_like(cm, dtype=float), where=row_sums != 0
@@ -128,10 +135,16 @@ def plot_confusion_matrix(cm, title, out_path):
 
 
 def append_result_row(results_csv, row_dict):
+    """
+    Upisuje red u results.csv. Ako red za isti (model, variant) vec postoji,
+    zamenjuje se novim, pa ponovno pokretanje ne pravi duplikate.
+    """
+    results_csv.parent.mkdir(parents=True, exist_ok=True)
     row_df = pd.DataFrame([row_dict])
     if results_csv.exists():
         existing = pd.read_csv(results_csv)
-        combined = pd.concat([existing, row_df], ignore_index=True)
+        same = (existing["model"] == row_dict["model"]) & (existing["variant"] == row_dict["variant"])
+        combined = pd.concat([existing[~same], row_df], ignore_index=True)
     else:
         combined = row_df
     combined.to_csv(results_csv, index=False)

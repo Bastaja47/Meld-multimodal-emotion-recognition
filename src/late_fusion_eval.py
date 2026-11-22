@@ -1,13 +1,13 @@
 """
-Racuna kasnu fuziju iz vec istreniranih audio i
-video modela za datu varijantu (base ili tp_cw)
+Korak 8: kasna fuzija iz vec istreniranih audio i video modela
+(za varijantu base ili tp_cw):
 
     p_final = alpha * p_audio + (1 - alpha) * p_video,   alpha = 0.5
 
+Primer:  python src/late_fusion_eval.py --variant base
 """
 
 import argparse
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -17,17 +17,9 @@ from torch.utils.data import DataLoader
 from sklearn.metrics import accuracy_score, f1_score, confusion_matrix
 
 from common import MELDFeatureDataset, UnimodalMLP, NUM_CLASSES, plot_confusion_matrix, append_result_row
+from config import MANIFEST_FINAL, CHECKPOINT_DIR, RESULTS_CSV, CONF_MAT_DIR
 
-
-MELD_ROOT = Path(r"C:\Users\XYZ\Desktop\MELD.Raw")
-
-
-MANIFEST_FINAL = MELD_ROOT / "manifest_final.csv"
-CKPT_DIR = MELD_ROOT / "checkpoints"
-RESULTS_CSV = MELD_ROOT / "results.csv"
-CONF_MAT_DIR = MELD_ROOT / "confusion_matrices"
-
-ALPHA = 0.5
+ALPHA = 0.5   # jednaka tezina audio i video grani
 BATCH_SIZE = 32
 
 
@@ -40,12 +32,12 @@ def load_model(ckpt_path, device):
 
 
 def get_probs(model, loader, device):
-    all_probs, all_labels = [], []   #lista tenzora i labela
+    """Vraca softmax verovatnoce (N, 7) i listu pravih labela."""
+    all_probs, all_labels = [], []
     with torch.no_grad():
-        for feats, labels in loader:  #ulazni vektori i labela batcha
+        for feats, labels in loader:
             feats = feats.to(device)
-            logits = model(feats)
-            probs = F.softmax(logits, dim=1)
+            probs = F.softmax(model(feats), dim=1)
             all_probs.append(probs.cpu())
             all_labels.extend(labels.tolist())
     return torch.cat(all_probs, dim=0).numpy(), all_labels
@@ -53,14 +45,15 @@ def get_probs(model, loader, device):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--variant", required=True, choices=["base", "tp_cw"])  #base je bez temporal pooling-a, tp_cw je sa temporal pooling-om i class weighting-om
+    # base: bez temporal pooling-a; tp_cw: temporal pooling + ponderisanje klasa
+    parser.add_argument("--variant", required=True, choices=["base", "tp_cw"])
     args = parser.parse_args()
 
     pooling = "tp" if args.variant == "tp_cw" else "none"
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    audio_ckpt = CKPT_DIR / f"audio_{args.variant}.pt"
-    video_ckpt = CKPT_DIR / f"video_{args.variant}.pt"
+    audio_ckpt = CHECKPOINT_DIR / f"audio_{args.variant}.pt"
+    video_ckpt = CHECKPOINT_DIR / f"video_{args.variant}.pt"
     if not audio_ckpt.exists() or not video_ckpt.exists():
         raise FileNotFoundError(
             f"Nedostaje checkpoint ({audio_ckpt} ili {video_ckpt}). "
@@ -70,10 +63,8 @@ def main():
     manifest = pd.read_csv(MANIFEST_FINAL)
     test_df = manifest[manifest["split"] == "test"]
 
-    audio_ds = MELDFeatureDataset(test_df, "audio", pooling)
-    video_ds = MELDFeatureDataset(test_df, "video", pooling)
-    audio_loader = DataLoader(audio_ds, batch_size=BATCH_SIZE, shuffle=False)
-    video_loader = DataLoader(video_ds, batch_size=BATCH_SIZE, shuffle=False)
+    audio_loader = DataLoader(MELDFeatureDataset(test_df, "audio", pooling), batch_size=BATCH_SIZE, shuffle=False)
+    video_loader = DataLoader(MELDFeatureDataset(test_df, "video", pooling), batch_size=BATCH_SIZE, shuffle=False)
 
     audio_model = load_model(audio_ckpt, device)
     video_model = load_model(video_ckpt, device)
@@ -83,7 +74,7 @@ def main():
 
     assert labels_a == labels_v, "Redosled test uzoraka mora biti isti za audio i video!"
 
-    final_probs = ALPHA * audio_probs + (1 - ALPHA) * video_probs  #alfa smo setovali na 0.5 da je jednako audio/video
+    final_probs = ALPHA * audio_probs + (1 - ALPHA) * video_probs
     preds = final_probs.argmax(axis=1)
 
     acc = accuracy_score(labels_a, preds)

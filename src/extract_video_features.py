@@ -1,10 +1,13 @@
 """
-Ekstrakcija video obelezja pomocu InceptionResnetV1(pretrained na VGGFace2, iz facenet-pytorch)
+Korak 5: ekstrakcija video obelezja pomocu InceptionResnetV1
+(pretreniran na VGGFace2, iz facenet-pytorch), bez fine-tuning-a.
 
-Za svaki klip imamo N_FRAMES=8 isecenih lica, fiksne velicine
-160x160 - sto je bas ocekivana ulazna velicina ovog modela. Svaki frejm se
-propusta kroz model i dobija se 512-dimenzionalni embedding, pa cuvamo
-sekvencu (N_FRAMES, 512) po klipu
+Za svaki klip postoji N_FRAMES=8 isecenih lica velicine 160x160, sto je
+ulazna velicina ovog modela. Svako lice daje 512-dimenzionalni embedding,
+pa se po klipu cuva sekvenca (8, 512).
+
+Napomena: VGGFace2 model je treniran za prepoznavanje IDENTITETA lica, a ne
+izraza lica, pa njegovi embeddinzi ne moraju najbolje da hvataju emocije.
 
 Rezultat: data/video_features/{split}/dia{D}_utt{U}.npy  oblika (8, 512)
 """
@@ -12,21 +15,14 @@ Rezultat: data/video_features/{split}/dia{D}_utt{U}.npy  oblika (8, 512)
 import numpy as np
 import pandas as pd
 import torch
-from pathlib import Path
 from facenet_pytorch import InceptionResnetV1
 from tqdm import tqdm
 
-
-MELD_ROOT = Path(r"C:\Users\XYZ\Desktop\MELD.Raw")
-
-
-MANIFEST = MELD_ROOT / "manifest.csv"
-FACES_DIR = MELD_ROOT / "data" / "faces"
-OUT_DIR = MELD_ROOT / "data" / "video_features"
+from config import MANIFEST, FACES_DIR, VIDEO_FEAT_DIR
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Koristim device: {device}")
-print("Ucitavam InceptionResnetV1 (vggface2) - prvi put ce skinuti tezine, ~107MB...")
+print("Ucitavam InceptionResnetV1 (vggface2) - prvi put skida tezine, ~107MB...")
 
 model = InceptionResnetV1(pretrained="vggface2", classify=False).eval().to(device)
 for p in model.parameters():
@@ -34,7 +30,7 @@ for p in model.parameters():
 
 
 def fixed_image_standardization(x):
-    # standardna facenet normalizacija piksela iz [0,255] u priblizno [-1,1]
+    # standardna facenet normalizacija: piksele [0, 255] -> priblizno [-1, 1]
     return (x - 127.5) / 128.0
 
 
@@ -51,7 +47,7 @@ def extract_clip_embedding(face_path):
 def main():
     manifest = pd.read_csv(MANIFEST)
     for split in manifest["split"].unique():
-        (OUT_DIR / split).mkdir(parents=True, exist_ok=True)
+        (VIDEO_FEAT_DIR / split).mkdir(parents=True, exist_ok=True)
 
     skipped_missing = 0
     failed = []
@@ -60,7 +56,7 @@ def main():
         split = row["split"]
         dia, utt = row["dialogue_id"], row["utterance_id"]
         face_path = FACES_DIR / split / f"dia{dia}_utt{utt}.npy"
-        out_path = OUT_DIR / split / f"dia{dia}_utt{utt}.npy"
+        out_path = VIDEO_FEAT_DIR / split / f"dia{dia}_utt{utt}.npy"
 
         if not face_path.exists():
             skipped_missing += 1
@@ -77,7 +73,7 @@ def main():
     print(f"\nPreskoceno (nema fajl lica): {skipped_missing}")
     print(f"Neuspesnih: {len(failed)}")
     if failed:
-        fail_path = OUT_DIR / "failed.csv"
+        fail_path = VIDEO_FEAT_DIR / "failed.csv"
         pd.Series(failed).to_csv(fail_path, index=False)
         print(f"Detalji o greskama: {fail_path}")
 

@@ -1,24 +1,18 @@
 """
-Pravljenje finalnog manifesta za trening
+Korak 6: pravi finalni manifest za trening.
 
-Uzima samo one klipove koji imaju uspesno izvucena i audio i video
-obelezja (data/audio_features i data/video_features). Ovo je ujedno i neka vrsta DRY fajla
+Zadrzava samo klipove za koje su uspesno izvucena i audio i video obelezja
+(data/audio_features i data/video_features), jer rana fuzija i poredjenje
+modela zahtevaju iste uzorke za obe modalnosti.
 
-Rezultat: manifest_final.csv sa kolonama:
+Rezultat: manifest_final.csv sa kolonama
     split, dialogue_id, utterance_id, audio_feat_path, video_feat_path,
     emotion, sentiment
 """
 
 import pandas as pd
-from pathlib import Path
 
-
-MELD_ROOT = Path(r"C:\Users\XYZ\Desktop\MELD.Raw")
-
-
-MANIFEST = MELD_ROOT / "manifest.csv"
-AUDIO_FEAT_DIR = MELD_ROOT / "data" / "audio_features"
-VIDEO_FEAT_DIR = MELD_ROOT / "data" / "video_features"
+from config import MANIFEST, MANIFEST_FINAL, AUDIO_FEAT_DIR, VIDEO_FEAT_DIR
 
 
 def main():
@@ -54,14 +48,13 @@ def main():
             })
 
     final = pd.DataFrame(rows)
-    out_path = MELD_ROOT / "manifest_final.csv"
-    final.to_csv(out_path, index=False)
+    final.to_csv(MANIFEST_FINAL, index=False)
 
     print(f"Ukupno u originalnom manifestu: {len(manifest)}")
     print(f"Nedostaje audio obelezja: {missing_audio}")
     print(f"Nedostaje video obelezja: {missing_video}")
     print(f"Finalno iskoristivih klipova: {len(final)}")
-    print(f"Sacuvano u: {out_path}")
+    print(f"Sacuvano u: {MANIFEST_FINAL}")
     print()
     print("Distribucija po split-u:")
     print(final["split"].value_counts())

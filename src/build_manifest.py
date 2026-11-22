@@ -1,47 +1,42 @@
 """
+Korak 1: pravi manifest.csv.
+
 Cita CSV fajlove sa labelama (train/dev/test_sent_emo.csv) i za svaki red
-proverava da li odgovarajuci .mp4 fajl postoji u odgovarajucem folderu
-Rezultat je manifest.csv sa kolonama:
+proverava da li odgovarajuci .mp4 postoji u odgovarajucem folderu.
+
+Rezultat: manifest.csv sa kolonama
     split, dialogue_id, utterance_id, video_path, emotion, sentiment
 
-Ovaj manifest koristimo u svim narednim koracima (ekstrakcija audija i
-frejmova lica), tako da ne moramo ponovo da petljamo sa CSV fajlovima
+Manifest se koristi u svim narednim koracima (ekstrakcija audija i lica),
+pa ne moramo ponovo da petljamo sa originalnim CSV fajlovima.
 """
 
 import pandas as pd
-from pathlib import Path
 
-
-MELD_ROOT = Path(r"C:\Users\XYZ\Desktop\MELD.Raw")
-
-
-SPLITS = {
-    "train": ("train_sent_emo.csv", "train_splits"),
-    "dev":   ("dev_sent_emo.csv", "dev_splits_complete"),         #dev je val
-    "test":  ("test_sent_emo.csv", "output_repeated_splits_test"),
-}
+from config import MELD_ROOT, SPLITS, MANIFEST
 
 
 def build():
     if not MELD_ROOT.exists():
         raise FileNotFoundError(
-            f"MELD_ROOT ne postoji: {MELD_ROOT}. Otvori ovaj fajl i ispravi putanju."
+            f"MELD_ROOT ne postoji: {MELD_ROOT}. "
+            f"Postavi promenljivu okruzenja MELD_ROOT na folder sa MELD podacima."
         )
 
-    rows = []                #Prazna lista za dataframe
+    rows = []
     for split, (csv_name, video_dir) in SPLITS.items():
         csv_path = MELD_ROOT / csv_name
         if not csv_path.exists():
             print(f"[UPOZORENJE] Ne postoji CSV: {csv_path} - preskacem {split}")
             continue
 
-        df = pd.read_csv(csv_path)          #dataframe sa svim redovima iz CSV-a
+        df = pd.read_csv(csv_path)
         video_folder = MELD_ROOT / video_dir
 
         found, missing = 0, 0
         missing_examples = []
 
-        for _, row in df.iterrows():   #Iteracija korz svaki red uzima dialog i utterance
+        for _, row in df.iterrows():
             dia = row["Dialogue_ID"]
             utt = row["Utterance_ID"]
             video_path = video_folder / f"dia{dia}_utt{utt}.mp4"
@@ -66,12 +61,11 @@ def build():
             print(f"    primeri fajlova koji nedostaju: {missing_examples}")
 
     manifest = pd.DataFrame(rows)
-    out_path = MELD_ROOT / "manifest.csv"
-    manifest.to_csv(out_path, index=False)
+    manifest.to_csv(MANIFEST, index=False)
 
     print()
     print(f"Ukupno redova u manifestu: {len(manifest)}")
-    print(f"Sacuvano u: {out_path}")
+    print(f"Sacuvano u: {MANIFEST}")
     print()
     print("Distribucija po split-u:")
     print(manifest["split"].value_counts())

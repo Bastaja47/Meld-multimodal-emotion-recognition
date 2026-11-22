@@ -1,23 +1,28 @@
 """
-Trening jednog modela: audio / video / early_fusion
+Korak 7: trening jednog modela (audio / video / early_fusion).
 
+Varijante:
   base   - bez temporal pooling-a (puna vremenska sekvenca, flatten),
            bez ponderisanja klasa
-  tp_cw  - sa temporal pooling-om (mean+std) i ponderisanjem klasa
+  tp_cw  - sa temporal pooling-om (mean+std) I ponderisanjem klasa
 
-Trening parametri
+Napomena: tp_cw menja dve stvari odjednom (pooling i pondere klasa), pa
+razlika izmedju varijanti ne moze da se pripise samo jednoj od njih.
+
+Parametri treninga:
   Adam, lr=1e-4, batch=32, max 30 epoha, ReduceLROnPlateau (patience=2),
   rano zaustavljanje (patience=5, kriterijum = weighted F1 na dev skupu),
-  unakrsna entropija (sa/bez class weights).
+  unakrsna entropija (sa/bez ponderisanja klasa).
 
-Rezultati (test acc/F1) se upisuju u results.csv, matrica konfuzije se
-cuva kao .png i .npy u confusion_matrices/, a najbolji model (po dev F1)
-u checkpoints/{model}_{variant}.pt.
+Najbolji model (po dev F1) se cuva u checkpoints/{model}_{variant}.pt i
+jednom se evaluira na test skupu. Rezultat ide u results/results.csv, a
+matrica konfuzije u results/confusion_matrices/.
+
+Primer:  python src/train.py --model audio --variant base
 """
 
 import argparse
 import copy
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -30,21 +35,20 @@ from common import (
     MELDFeatureDataset, UnimodalMLP, EarlyFusionMLP, LABEL2IDX,
     NUM_CLASSES, plot_confusion_matrix, append_result_row,
 )
-
-
-MELD_ROOT = Path(r"C:\Users\XYZ\Desktop\MELD.Raw")
-
-
-MANIFEST_FINAL = MELD_ROOT / "manifest_final.csv"
-CKPT_DIR = MELD_ROOT / "checkpoints"
-RESULTS_CSV = MELD_ROOT / "results.csv"
-CONF_MAT_DIR = MELD_ROOT / "confusion_matrices"
+from config import MANIFEST_FINAL, CHECKPOINT_DIR, RESULTS_CSV, CONF_MAT_DIR
 
 BATCH_SIZE = 32
 LR = 1e-4
 MAX_EPOCHS = 30
 EARLY_STOP_PATIENCE = 5
 LR_PATIENCE = 2
+SEED = 42   # fiksira nasumicnost; prvobitni rezultati su dobijeni bez fiksnog seed-a
+
+
+def set_seed(seed):
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
 
 
 def get_modality(model_name):
@@ -92,6 +96,8 @@ def main():
     parser.add_argument("--model", required=True, choices=["audio", "video", "early_fusion"])
     parser.add_argument("--variant", required=True, choices=["base", "tp_cw"])
     args = parser.parse_args()
+
+    set_seed(SEED)
 
     pooling = "tp" if args.variant == "tp_cw" else "none"
     use_class_weight = args.variant == "tp_cw"
@@ -166,11 +172,12 @@ def main():
 
     model.load_state_dict(best_state)
 
-    CKPT_DIR.mkdir(parents=True, exist_ok=True)                  #checkpoint direktorijum
-    ckpt_path = CKPT_DIR / f"{args.model}_{args.variant}.pt"
+    CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
+    ckpt_path = CHECKPOINT_DIR / f"{args.model}_{args.variant}.pt"
     torch.save({"state_dict": best_state, "input_dim": input_dim}, ckpt_path)
     print(f"Najbolji model sacuvan: {ckpt_path}")
 
+    # test skup se koristi samo jednom, na kraju
     test_loss, test_acc, test_f1, test_preds, test_labels = run_epoch(
         model, test_loader, criterion, device, train=False
     )

@@ -1,0 +1,14 @@
+# PyTorch instaliraj posebno, u skladu sa svojom CUDA verzijom:
+#   https://pytorch.org/get-started/locally/
+torch
+numpy
+pandas
+scikit-learn
+matplotlib
+soundfile
+tqdm
+transformers
+facenet-pytorch
+opencv-python
+pillow
+# Van pip-a: ffmpeg i ffprobe moraju biti instalirani i dostupni u PATH-u.
